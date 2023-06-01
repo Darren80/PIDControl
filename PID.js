@@ -56,20 +56,26 @@ class PID {
 
     // Main method to run PID control
     run() {
+        // Update timekeeping variables
+        this.updateDeltaTime();
+
         // Calculate error terms
         this.calcProportionalError();
         this.calcIntegralError();
         this.calcDerivativeError();
 
         // Combine errors to obtain net output
-        this.totalTerm = this.proportionalTerm + this.integralTerm + this.derivativeTerm;
+        let provisionalTotalTerm = this.proportionalTerm + this.integralTerm + this.derivativeTerm;
+        this.totalTerm = Math.min(Math.max(provisionalTotalTerm, this.outputLowerLimit), this.outputUpperLimit);
         // Clamp output to limits
         // Integrator anti-windup in event of output saturation
-        if (this.totalTerm > this.outputUpperLimit) {
+        if (provisionalTotalTerm > this.outputUpperLimit) {
             this.backCalculateIntegralError();
-        } else if (this.totalTerm < this.outputLowerLimit) {
+        } else if (provisionalTotalTerm < this.outputLowerLimit) {
             this.backCalculateIntegralError();
         }
+
+
 
         // Update chart data every x ms
         if (Date.now() - this.lastChartUpdateTime > 200) {
@@ -84,10 +90,7 @@ class PID {
         return this.totalTerm;
     }
 
-    // Setter for current value, also updates past value
-    // run() should be called right after this to update the error values.
-    set currentVal(newProcessVariable) {
-
+    updateDeltaTime() {
         // Update timekeeping variables
         let currentTime = Date.now();
         this.deltaTime = (currentTime - this.lastUpdateTime) / 1000;
@@ -95,12 +98,18 @@ class PID {
         if (this.deltaTime == 0) { this.deltaTime = 0.01; }
         this.lastUpdateTime = currentTime;
 
-        this.acceleration = (newProcessVariable - this.processVariable) / this.deltaTime;
+        // Calculate acceleration
+        this.acceleration = (this.processVariable - this.previousProcessVariable) / this.deltaTime;
+    }
 
-        // Update stuff
+    // Setter for current value, also updates past value
+    // run() should be called right after this to update the error values.
+    set currentVal(newProcessVariable) {
+        // Write new Process Variable (PV) and update previous PV.
         this.previousProcessVariable = this.processVariable;
         this.processVariable = newProcessVariable;
 
+        // Calculate new error e(t) and update previous error e(t).
         this.previousError = this.currentError;
         this.currentError = this._setpoint - this.processVariable;
     }
@@ -115,7 +124,7 @@ class PID {
         // Accumulate difference between current and target
         this.integralAccumulator += (this.currentError);
 
-        // Reduce integrator (faster) if the error has changed sign
+        // Reduce integrator (faster) if the error has changed sign. (Anti-windup based on setpoint crossing)
         let adjustmentFactor = 0.2;
         if ((this.processVariable >= this._setpoint && this.previousProcessVariable <= this._setpoint)) {
             console.log("Integral accumulator reduced");
@@ -132,8 +141,8 @@ class PID {
     // Derivative error calculation
     calcDerivativeError() {
         // Calculate rate of change of error
-        let derivative = - ((this.currentError - this.previousError) / this.deltaTime) * this.derivativeGain;
-
+        let derivative =  ((this.processVariable - this.previousProcessVariable) / this.deltaTime) * this.derivativeGain;
+        console.log("Current error: " + this.currentError + " | Previous error: " + this.previousError + " | Delta time: " + this.deltaTime)
         /*************
          * LP Filter *
          * ***********/
@@ -147,14 +156,12 @@ class PID {
         /************
          * Back-calculation of integral term *
          * **********/
-        
+
         // Calculate the control signal without considering the integral part
         let uBackCalc = this.proportionalTerm + this.derivativeTerm;
         // Adjust the integral accumulator by the difference between the desired control signal and non-integral control signal, 
         //divided by the integral gain and multiplied by the time elapsed. This will prevent integral wind-up.
-        this.integralAccumulator += - ((this.totalTerm - uBackCalc) / this.integralGain * this.deltaTime);
-
-
+        this.integralAccumulator += - ((this.totalTerm - uBackCalc) / this.integralGain * this.deltaTime); 
 
         // Debug code
         let x = (this.totalTerm - uBackCalc) / this.integralGain * this.deltaTime;

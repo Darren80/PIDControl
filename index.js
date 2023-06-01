@@ -13,7 +13,7 @@ const car = new Car();
 if (car.numPassengers <= 4) {
     speedController = new PID(0.8, 0.0005, 1.2);
 } else if (car.numPassengers > 4) {
-    speedController = new PID(1, 0.0005, 1.2);
+    speedController = new PID(1, 0.0005, 2);
 }
 
 // Watchdog variables

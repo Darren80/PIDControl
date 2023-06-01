@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 
+<!-- import index.css -->
+<link rel="stylesheet" href="index.css">
+
 <head>
     <meta charset="UTF-8" />
     <title>PIDControl</title>
@@ -11,9 +14,25 @@
     </style>
 </head>
 
-<body>
-    <canvas id="canvas"></canvas>
-</body>
+<div>
+    <div style="width: 800px;">
+        <canvas id="chart"></canvas>
+    </div>
+</div>
+
+<p id="setpoint"></p>
+<input type="text" id="setpoint-input" placeholder="Setpoint" />
+
+<div id="charts-container">
+    <div>
+        <canvas id="data"></canvas>
+    </div>
+    <div>
+        <canvas id="data2"></canvas>
+    </div>
+</div>
+
+
 <script src="index.js"></script>
 
 </html>

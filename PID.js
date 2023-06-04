@@ -29,7 +29,8 @@ class PID {
         this.deltaTime = 0.01; // Time since last update
 
         this.currentError = 0;
-        this.previousError = 0;
+        // this.previousError = 0;
+
 
         // Output limits
         this.outputLowerLimit = outputLowerLimit;
@@ -43,14 +44,16 @@ class PID {
         this.derivativeErrorData = [];
         this.processVariableData = [];
         this.totalTermData = [];
-        this.acceleration = 0;
         this.accelerationData = [];
+        this.acceleration = 0; // 
+        this.tick = 0;
+
+        // Initialisation Procedure
+
     }
 
     set setpoint(newSetpoint) {
         this._setpoint = newSetpoint;
-        this.currentError = newSetpoint;
-        this.previousError = newSetpoint;
     }
 
 
@@ -94,9 +97,10 @@ class PID {
         // Update timekeeping variables
         let currentTime = Date.now();
         this.deltaTime = (currentTime - this.lastUpdateTime) / 1000;
+        this.lastUpdateTime = currentTime;
         // Prevent divide by zero error
         if (this.deltaTime == 0) { this.deltaTime = 0.01; }
-        this.lastUpdateTime = currentTime;
+        
 
         // Calculate acceleration
         this.acceleration = (this.processVariable - this.previousProcessVariable) / this.deltaTime;
@@ -110,14 +114,13 @@ class PID {
         this.processVariable = newProcessVariable;
 
         // Calculate new error e(t) and update previous error e(t).
-        this.previousError = this.currentError;
+        // this.previousError = this.currentError;
         this.currentError = this._setpoint - this.processVariable;
     }
 
     // Proportional error calculation
     calcProportionalError() {
         this.proportionalTerm = (this.currentError) * this.proportionalGain;
-        console.log("Setpoint: " + this._setpoint + " | Process Variable: " + this.processVariable + " | Proportional Error: " + this.proportionalTerm);
     }
     // Integral error calculation
     calcIntegralError() {
@@ -125,13 +128,13 @@ class PID {
         this.integralAccumulator += (this.currentError);
 
         // Reduce integrator (faster) if the error has changed sign. (Anti-windup based on setpoint crossing)
-        let adjustmentFactor = 0.2;
+        let adjustmentFactor = 0.5;
         if ((this.processVariable >= this._setpoint && this.previousProcessVariable <= this._setpoint)) {
             console.log("Integral accumulator reduced");
             this.integralAccumulator = this.integralAccumulator * (1 - adjustmentFactor);
         } else if ((this.processVariable <= this._setpoint && this.previousProcessVariable >= this._setpoint)) {
             console.log("Integral accumulator increased");
-            this.integralAccumulator = this.integralAccumulator * (1 + adjustmentFactor);
+            this.integralAccumulator = this.integralAccumulator * (1 - adjustmentFactor);
         }
 
         // Calculate integral error
@@ -142,7 +145,6 @@ class PID {
     calcDerivativeError() {
         // Calculate rate of change of error
         let derivative =  ((this.processVariable - this.previousProcessVariable) / this.deltaTime) * this.derivativeGain;
-        console.log("Current error: " + this.currentError + " | Previous error: " + this.previousError + " | Delta time: " + this.deltaTime)
         /*************
          * LP Filter *
          * ***********/
@@ -172,6 +174,9 @@ class PID {
 
 
     updateChartData() {
+        this.tick === 0 ? this.tick = 1 : this.tick = 0;
+        if (this.tick === 0) { return }
+
         this.proportionalErrorData.push(this.proportionalTerm);
         this.integralErrorData.push(this.integralTerm);
         this.derivativeErrorData.push(this.derivativeTerm);
@@ -180,12 +185,12 @@ class PID {
         this.accelerationData.push(this.acceleration);
 
 
-        if (this.proportionalErrorData.length > 100) this.proportionalErrorData.shift();
-        if (this.integralErrorData.length > 100) this.integralErrorData.shift();
-        if (this.derivativeErrorData.length > 100) this.derivativeErrorData.shift();
-        if (this.processVariableData.length > 100) this.processVariableData.shift();
-        if (this.totalTermData.length > 100) this.totalTermData.shift();
-        if (this.accelerationData.length > 100) this.accelerationData.shift();
+        if (this.proportionalErrorData.length > 200) this.proportionalErrorData.shift();
+        if (this.integralErrorData.length > 200) this.integralErrorData.shift();
+        if (this.derivativeErrorData.length > 200) this.derivativeErrorData.shift();
+        if (this.processVariableData.length > 200) this.processVariableData.shift();
+        if (this.totalTermData.length > 200) this.totalTermData.shift();
+        if (this.accelerationData.length > 200) this.accelerationData.shift();
     }
 }
 

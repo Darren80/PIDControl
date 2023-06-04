@@ -11,6 +11,8 @@ class Car {
         this.previousTimestamp = Date.now();  // For deltaTime calculation
 
         this.sigmoidSteepness = 0.08;  // Steepness of the sigmoid function curve depends on topSpeed. The higher the topSpeed, the shallower the curve.
+        
+        this.throttleResponse = 0.5;  // How fast the car responds to throttle input. 0.5 means the car will reach 50% of the throttle value in 1 second all other factors excluded.
     }
 
     // Getter for current weight
@@ -24,7 +26,6 @@ class Car {
             // Sigmoid function
             return (1 / (1 + Math.exp(-this.sigmoidSteepness * (this.velocity - this.topSpeed / 2 )))) ;
         }
-        console.log(logisticFunction(aceleration), "<- logisticFunction(aceleration)")
         return aceleration * (1 - logisticFunction(aceleration));
     }
 
@@ -45,16 +46,16 @@ class Car {
         this.previousTimestamp = currentTimestamp;
 
         // Calculate acceleration by random constant. The random constant represents the calculated engine power (mass, force, power)
-        let provisionalAcceleration = throttle * 0.5;
-        console.log(provisionalAcceleration, "<- provisionalAcceleration")
+        let provisionalAcceleration = throttle * this.throttleResponse;
+        // console.log(provisionalAcceleration, "<- provisionalAcceleration")
 
         // The logistic function is used to simulate drag and make the reduction in acceleration more gradual
         provisionalAcceleration = this.scaleAcelerationBySpeed(provisionalAcceleration);
-        console.log(provisionalAcceleration, "<- provisionalAcceleration")
+        // console.log(provisionalAcceleration, "<- provisionalAcceleration")
 
         // Reduce acceleration by mass (i.e. the more mass, the less acceleration) (using number of passengers as a proxy for mass)
         provisionalAcceleration = this.scaleAccelerationByMass(provisionalAcceleration);
-        console.log(provisionalAcceleration, "<- provisionalAcceleration")
+        // console.log(provisionalAcceleration, "<- provisionalAcceleration")
 
         // Clamp acceleration if it exceeds the acceleration limit
         if (provisionalAcceleration > this.accelerationLimit) {

@@ -1,10 +1,14 @@
 import Chart from 'chart.js/auto';
+import ChartAnnotation from 'chartjs-plugin-annotation';
+
 import PID from './PID.js';
 import Car from './car.js';
 
+Chart.register(ChartAnnotation);
+
 
 // Create a new instance of the PID controller and the Car
-let speedController; 
+let speedController;
 const car = new Car();
 
 // The PID controller will be tuned differently depending on the number of passengers in the car
@@ -17,8 +21,8 @@ if (car.numPassengers <= 4) {
 }
 
 // Watchdog variables
-let lastUpdate = new Date().getTime(); 
-let watchdogTimeout = 5000; 
+let lastUpdate = new Date().getTime();
+let watchdogTimeout = 5000;
 // In real world the watchdog would be a separate thread that monitors the PID output.
 function watchDog() {
     setInterval(() => {
@@ -31,6 +35,22 @@ function watchDog() {
     }, 1000); // Check every second
 }
 
+function dr() {
+    car.throttleResponse = 0.2;
+    // Cascading timeouts in 500ms intervals
+    setTimeout(() => {
+        car.velocity = car.velocity * 0.97;
+        setTimeout(() => {
+            car.velocity = car.velocity * 0.97;
+            setTimeout(() => {
+                car.velocity = car.velocity * 0.97;
+                setTimeout(() => {
+                    car.velocity = car.velocity * 0.97;
+                }, 1000);
+            }, 1000);
+        }, 1000);
+    }, 1000);
+}
 
 let dampData = [];
 let damp = 0.00;
@@ -39,61 +59,60 @@ let damp = 0.00;
 let maxAccelerationMphPerSec = 2.5 * 2.23694; // 2.5 m/s^2 converted to mph/s
 let maxDecelerationMphPerSec = 3.5 * 2.23694; // 2.5 m/s^2 converted to mph/s
 
-function RunCar() {
-    setInterval(() => {
-        lastUpdate = new Date().getTime(); // Update the lastUpdate time each loop
-        
-        // Run the PID controller with the current state of the system
-        speedController.currentVal = car.velocity;
-        let pidOutput = speedController.run();
 
-        console.log("PID Output: " + pidOutput);
+function runCar() {
+    // if (speedController.processVariable > speedController._setpoint) { dr(); }
+    if (car.velocity > 60) { car.velocity = 60; }
 
-        // Calculate the acceleration
-        let acceleration = (speedController.processVariable - speedController.previousProcessVariable) / speedController.deltaTime;
+    lastUpdate = new Date().getTime(); // For the watchdog timer.
 
-        // Does the acceleration exceed the manually set limit?
-        let exceedance = 0;
-        // Accelerative motion
-        if (acceleration > maxAccelerationMphPerSec) {
-            exceedance = Math.abs(acceleration) - maxAccelerationMphPerSec;
+    // Set the PID controller's process variable to the current speed of the car.
+    speedController.currentVal = car.velocity;
+    // Run the PID controller. This will calculate the PID output.
+    let pidOutput = speedController.run();
 
-            // Decelerative motion
-        } else if (acceleration < -maxDecelerationMphPerSec) {
-            exceedance = Math.abs(acceleration) - maxDecelerationMphPerSec;
-        }
+    // console.log("PID Output: " + pidOutput);
 
-        console.log(acceleration, "<- Acceleration")
-        console.log(exceedance, "<- Exceedance");
-        if (exceedance > 0 && damp < 0.999) {
-            // Adjust the dampening factor based on how much the acceleration exceeds the limit
-            damp += exceedance * 0.01; if (damp >= 1) { damp = 0.999; }
-            console.log("ON")
-        } else if (exceedance <= 0 && damp > 0) {
-            // If the acceleration is below the limit, gradually reduce the dampening factor
-            damp -= 0.001;
-            console.log("OFF")
-        }
+    // Calculate the acceleration
+    let acceleration = speedController.acceleration;
+    // console.log("PID Acceleration: ", acceleration);
 
-        pidOutput = pidOutput * (1 - damp);
+    // Does the acceleration exceed the manually set limit?
+    let exceedance = 0;
+    // Accelerative motion
+    if (acceleration > maxAccelerationMphPerSec) {
+        exceedance = Math.abs(acceleration) - maxAccelerationMphPerSec;
 
-        console.log("Damp: ", damp);
-        console.log("Adjusted PID Output: ", pidOutput);
+        // Decelerative motion
+    } else if (acceleration < -maxDecelerationMphPerSec) {
+        exceedance = Math.abs(acceleration) - maxDecelerationMphPerSec;
+    }
+
+    // If the acceleration exceeds the limit, dampen the PID output
+    if (exceedance > 0 && damp < 0.999) {
+        // Adjust the dampening factor based on how much the acceleration exceeds the limit
+        damp += exceedance * 0.01; if (damp >= 1) { damp = 0.999; }
+        console.log("ON ", damp, "Exceedance: ", exceedance)
+    } else if (exceedance <= 0 && damp > 0) {
+        // If the acceleration is below the limit, gradually reduce the dampening factor
+        damp -= 0.01;
+        console.log("OFF ", damp, "Exceedance: ", exceedance)
+    }
+    console.log("damp: ", damp)
+
+    pidOutput = pidOutput * (1 - damp);
+
+    // console.log("Adjusted PID Output: ", pidOutput);
 
 
 
-        // Update the car's speed using the PID controller output
-        car.update(pidOutput);
+    // Update the car's speed using the PID controller output
+    car.update(pidOutput);
 
-        // Update the chart data
-        dampData.push(damp);
-        if (dampData.length > 100) dampData.shift();
-    }, 50);
+    // Update the chart data
+    dampData.push(damp);
+    if (dampData.length > 100) dampData.shift();
 }
-
-watchDog();
-init();
-RunCar();
 
 function setSetpoint(controller, setpoint) {
     controller.setpoint = setpoint;
@@ -107,16 +126,20 @@ function setSetpoint(controller, setpoint) {
 
 let chart;
 let chart2;
+
+let runs = 0;
+let interval = 100;
 function init() {
     // Default values on load
-    setSetpoint(speedController, 60);
+    setSetpoint(speedController, 80);
 
     // Create the chart
     const ctx = document.getElementById('data').getContext('2d');
+    console.log(interval)
     chart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: Array(100).fill(''), // Placeholder labels
+            labels: Array.from({ length: 200 }, (v, i) => i * interval * 2), // Placeholder labels
             datasets: [
 
                 {
@@ -159,10 +182,24 @@ function init() {
                     display: true,
                     title: {
                         display: true,
-                        text: 'Value'
+                        text: 'Speed (MPH)'
                     },
                     // min: -10, // Minimum y value
                     // max: 40, // Maximum y value
+                }
+            },
+            plugins: {
+                annotation: {
+                    annotations: {
+                        line1: {
+                            type: 'line',
+                            yMin: speedController._setpoint,
+                            yMax: speedController._setpoint,
+                            borderColor: 'rgb(75, 192, 192)',
+                            borderWidth: 2,
+                            borderDash: [5, 5] // optional dashed line
+                        }
+                    }
                 }
             }
         }
@@ -172,7 +209,7 @@ function init() {
     chart2 = new Chart(ctx2, {
         type: 'line',
         data: {
-            labels: Array(100).fill(''), // Placeholder labels
+            labels: Array.from({ length: 200 }, (v, i) => i * interval * 2), // Placeholder labels
             datasets: [
 
                 {
@@ -209,12 +246,33 @@ function init() {
                     // min: -10, // Minimum y value
                     // max: 40, // Maximum y value
                 }
+            },
+            plugins: {
+                annotation: {
+                    annotations: {
+                        line1: {
+                            type: 'line',
+                            yMin: maxAccelerationMphPerSec,
+                            yMax: maxAccelerationMphPerSec,
+                            borderColor: 'rgb(75, 192, 192)',
+                            borderWidth: 2,
+                            borderDash: [5, 5] // optional dashed line
+                        }
+                    }
+                }
             }
-        }
+        },
+
     });
 
     setInterval(() => {
         chart.update();
         chart2.update();
-    }, 100);
+        runCar();
+        runs++;
+        console.log("Runs: ", runs)
+    }, interval);
 }
+
+watchDog();
+init();
